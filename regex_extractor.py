@@ -18,14 +18,14 @@ output_json = os.path.join(current_dir, "output", "output.json")
 output_json_with_tables = os.path.join(current_dir, "output", "output_with_tables.json")
 output_docx = os.path.join(current_dir, "output", "output.docx")
 output_docx_with_tables = os.path.join(current_dir, "output", "output_with_tables.docx")
-pdf_directory = os.path.join(current_dir, "pdfs")
+pdf_directory = os.path.join(current_dir, "pdfs", "with table")
 image_dir = os.path.join(current_dir, "images")
 
 # Load environment variables from .env
 load_dotenv()
 
 # Create a ChatOpenAI model
-model = ChatOpenAI(model="gpt-4o-mini")
+model = ChatOpenAI(model="gpt-4o")
 
 # Define the output structure
 class ExtractedData(BaseModel):
@@ -41,7 +41,7 @@ class ExtractedData(BaseModel):
 parser = PydanticOutputParser(pydantic_object=ExtractedData)
 
 rephraser_prompt_template = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert Rephraser. Your task is to rephrase and rewrite the given text preserving all the original data. Ensure that the rephrased text is clear, concise, and maintains the original meaning. If there are python list structures leave them as they are."),
+    ("system", "You are an expert Rephraser. Your task is to rephrase and rewrite the given text preserving all the original data. Ensure that the rephrased text is clear, concise, and maintains the original meaning. If there are python list structures leave them as they are and rephrase the rest of the text."),
     ("human", "Use the following text:\n\n{text}")
 ])
 
@@ -60,10 +60,11 @@ table_recognizer_prompt_template = ChatPromptTemplate.from_messages([
         * Replace the original table with a formatted list of lists, separated by two newlines.
         * If a table is detected, return the output as a dictionary with two fields: 
           - `content`: The text with the table(s) formatted as list of lists.
-          - `table_detected`: `True`
+          - `table_detected`: `true`
         * If no table is detected, return the output as a dictionary with two fields:
           - `content`: The original text without any modifications.
-          - `table_detected`: `False`
+          - `table_detected`: `false`
+        *Reply in json format.
 
         **Example:**
 
@@ -81,7 +82,7 @@ table_recognizer_prompt_template = ChatPromptTemplate.from_messages([
         ["Bob", "30", "London"]
         ]
     """),
-    ("human", "Use the following text:\n\n{text}\n\n reply in json format")
+    ("human", "Use the following text:\n\n{text}")
 ])
 
 # Create the chain
@@ -134,9 +135,9 @@ def extract_question_data(text):
         question = question_match.group(1).strip()
         text = text[question_match.end():]  # Remove the extracted question from the text
 
-    # Regex to find the correct answer
-    correct_answer_pattern = r"(\d\.\s.*?)(?=\s✔|\s)"
-    correct_answers = re.findall(correct_answer_pattern, text, re.DOTALL)
+    # # Regex to find the correct answer
+    # correct_answer_pattern = r"^(.*?)(?=\s*✔)"
+    # correct_answers = re.findall(correct_answer_pattern, text, re.DOTALL)
 
     # Regex to capture the options
     options_pattern = r"(\d\.\s.*?)(?=\n\s*\d\.|\n\s*(?:CORRECT|INCORRECT))"
@@ -185,8 +186,8 @@ def extract_question_data(text):
     pattern = re.compile(r"\(Choice[s]? (\d(?: & \d)*)\) (.*?)(?=\(Choice|\Z)", re.DOTALL)
 
     # Insert the correct choice justification
-    correct_answer_pattern = re.compile(r'The correct answer is \d\.\s*(.*?)\s*(?=\(Choice|\Z)', re.DOTALL)
-    correct_justification_match = correct_answer_pattern.search(justification_text)
+    correct_choice_pattern = re.compile(r'The correct answer is \d\.\s*(.*?)\s*(?=\(Choice|\Z)', re.DOTALL)
+    correct_justification_match = correct_choice_pattern.search(justification_text)
     
     if correct_justification_match and correct_answer:
         correct_justification = correct_justification_match.group(1).strip().replace('\n', ' ')
@@ -205,7 +206,7 @@ def extract_question_data(text):
     "question": question,
     "options": options,
     "allocated_points": allocated_points,
-    "correct_answers": correct_answers,
+    "correct_answers": correct_answer,
     "justifications": formatted_justifications
     }
 
@@ -222,7 +223,11 @@ def list_tables_and_rephrase(text, tabel_chain, rephrase_chain):
     
     # Step 2: Parse the JSON response
     json_content = response.content.strip('```json').strip('```')
-    parsed_data = json.loads(json_content)
+
+    try:
+        parsed_data = json.loads(json_content)
+    except json.JSONDecodeError:
+        parsed_data = json_content
 
     # Extract Tables and content
     tables_present = parsed_data['table_detected']
@@ -348,6 +353,9 @@ def extract_pdfs(directory):
             # print(final_text)
 
             input_text = extract_question_data(final_text)
+            print("--------------------------input_text---------------------------")
+            print(input_text)
+            print("---------------------------------------------------------------")
 
             j_consist_tables = False
             q_consist_tables = False
@@ -375,8 +383,10 @@ def extract_pdfs(directory):
                 append_content_to_docx(result_dict, image_paths, output_docx)
                 append_json_to_file(result_dict, output_json)                
 
+            print("--------------------------output_text---------------------------")
             print(result_dict)
-                    
+            print("----------------------------------------------------------------")
+
     return
 
 extract_pdfs(pdf_directory)
