@@ -4,8 +4,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
-from langchain.chains import LLMChain
-from langchain.schema.runnable import RunnableLambda
 import os
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +14,7 @@ output_file = os.path.join(current_dir, "output", "output.json")
 load_dotenv()
 
 # Create a ChatOpenAI model
-model = ChatOpenAI(model="gpt-4")
+model = ChatOpenAI(model="gpt-4o-mini")
 
 # Define the output structure
 class ExtractedData(BaseModel):
@@ -24,24 +22,23 @@ class ExtractedData(BaseModel):
     question: str = Field(description="The extracted question")
     allocated_points: int = Field(description="The number of points allocated to the question")
     options: list[str] = Field(description="All the options given to select the answer")
-    correct_answer: int = Field(description="The correct answer")
-    justification: str = Field(description="The justification for the correct answer and why other options are incorrect")
+    correct_answer: list[int] = Field(description="The correct answers")
+    justification: list[str] = Field(description="The justification for the correct answer and why other options are incorrect")
 
 # Create a parser
 parser = PydanticOutputParser(pydantic_object=ExtractedData)
 
 # Define prompt templates
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert extractor. Extract the question, allocated points, answer, correct answer and justification from the given text. Format your response as JSON."),
-    ("human", "Use the following text to extract the required information:\n\n{text}\n\n{format_instructions}")
+    ("system", "You are an expert extractor (If you find a table somewhere, return it as a list of lists seperated by 2 new line characters.) and a rephraser. Extract the question, allocated points, options, correct answer/s and justifications from the given text. Then rephrase the question, options and justifications while preserving all the information. Format your response as JSON."),
+    ("human", "Use the following text to extract and rephrase the required information and return in json format:\n\n{text}\n\n{format_instructions}")
 ])
-
-
 
 # Create the LLMChain
 chain = (
     prompt_template | model | parser
 )
+
 
 # Function to append JSON to file
 def append_json_to_file(json_object, filename=output_file):
@@ -93,7 +90,7 @@ def process_json_file(input_filename, output_filename='output.json'):
     return results
 
 # Example usage
-input_filename = json_file  # Replace with your input JSON file name
+input_filename = json_file
 results = process_json_file(input_filename)
 
 # Print results (optional)
