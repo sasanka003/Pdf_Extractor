@@ -116,6 +116,10 @@ def remove_content_above_question(text):
 
     return text.strip()
 
+def push_content_to_db(data):
+    # Push the data to the database
+    pass
+
 def extract_question_data(text):
     points_pattern = r"(\d+)\s+point\(s\)"
 
