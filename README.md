@@ -57,6 +57,7 @@ This project is a Python-based application that extracts questions, options, cor
 5. **Prepare your Firebase credentials:**
 
     Download your Firebase Admin SDK credentials (firebase_credentials.json) and place it in the root directory.
+    <br>[Watch this video on YouTube](https://www.youtube.com/watch?v=qsFYq_1BQdk&t=290s)
 
 ## Usage
 1. **Set up environment variables:**
