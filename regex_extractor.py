@@ -2,7 +2,7 @@ import pdfplumber
 from docx import Document
 from docx.shared import Inches
 from PIL import Image
-import io
+from io import BytesIO
 import re
 import json
 from dotenv import load_dotenv
@@ -11,6 +11,8 @@ from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 import os
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,11 +20,26 @@ output_json = os.path.join(current_dir, "output", "output.json")
 output_json_with_tables = os.path.join(current_dir, "output", "output_with_tables.json")
 output_docx = os.path.join(current_dir, "output", "output.docx")
 output_docx_with_tables = os.path.join(current_dir, "output", "output_with_tables.docx")
-pdf_directory = os.path.join(current_dir, "pdfs", "with table")
+# pdf_directory = os.path.join(current_dir, "pdfs", "with table")
+pdf_directory = os.path.join(current_dir, "pdfs")
 image_dir = os.path.join(current_dir, "images")
+firebase_credentials = os.path.join(current_dir, "firebase_credentials.json")
 
 # Load environment variables from .env
 load_dotenv()
+
+FIRESTORE_BUCKET = os.getenv('FIRESTORE_BUCKET')
+
+# Initialize Firebase
+cred = credentials.Certificate(firebase_credentials)
+firebase_admin.initialize_app(cred,
+                              {
+        'storageBucket': FIRESTORE_BUCKET
+    })
+
+# Initialize Firestore and Storage
+db = firestore.client()
+bucket = storage.bucket()
 
 # Create a ChatOpenAI model
 model = ChatOpenAI(model="gpt-4o")
@@ -115,10 +132,6 @@ def remove_content_above_question(text):
     text = re.sub(rf'.*?{re.escape(phrase)}', '', text, flags=re.DOTALL)
 
     return text.strip()
-
-def push_content_to_db(data):
-    # Push the data to the database
-    pass
 
 def extract_question_data(text):
     points_pattern = r"(\d+)\s+point\(s\)"
@@ -244,6 +257,11 @@ def list_tables_and_rephrase(text, tabel_chain, rephrase_chain):
     # Step 4: Return the rephrased content and tables
     return rephrased_response.content , tables_present
 
+def push_content_to_db(data):
+    # Push the data to the database
+    db.collection('Questions').add(data)
+    return
+
 # Function to append JSON to file
 def append_json_to_file(json_object, filename):
     try:
@@ -305,7 +323,6 @@ def append_content_to_docx(data, image_paths, docx_path):
             doc.add_paragraph(f"{choice} - {justification}")
     
     # Add the images
-    image_paths = data.get('images', [])
     if image_paths:
         doc.add_heading('Images:', level=2)
         for img_path in image_paths:
@@ -313,6 +330,19 @@ def append_content_to_docx(data, image_paths, docx_path):
 
     # Save the document
     doc.save(docx_path)
+
+def upload_image_to_firebase(image_path, filename):
+    """Uploads an image to Firebase Storage and returns the image URL."""
+    # Generate a unique filename for the image
+    blob = bucket.blob(filename)
+    blob.upload_from_filename(image_path)  # Upload image
+    
+
+    # Make the file publicly accessible
+    blob.make_public()
+
+    # Get the public URL of the uploaded image
+    return blob.public_url
 
 def extract_pdfs(directory):
     """Converts PDFs in a directory to a single JSON file.
@@ -327,6 +357,7 @@ def extract_pdfs(directory):
             pdf_path = os.path.join(directory, filename)
             text = ""
             image_paths = []
+            image_urls = []
             print(f"Processing {filename}...")
             with pdfplumber.open(pdf_path) as pdf:
                 for page_num, page in enumerate(pdf.pages):
@@ -347,6 +378,9 @@ def extract_pdfs(directory):
                         img_path = os.path.join(image_dir, img_filename)
                         cropped_image.save(img_path)
                         image_paths.append(img_path)
+                        image_url = upload_image_to_firebase(img_path, img_filename)
+                        image_urls.append(image_url)
+
 
             without_top_content = remove_content_above_question(text)
             # Remove consecutive duplicate words
@@ -376,16 +410,19 @@ def extract_pdfs(directory):
                     j_consist_tables = True
             
             result_dict['filename'] = filename
-            result_dict['images'] = image_paths if image_paths else []
+            # result_dict['images'] = image_paths if image_paths else []
+            result_dict['images'] = image_urls if image_urls else []
 
             if q_consist_tables or j_consist_tables:
                 result_dict['consist_tables'] = True
                 append_content_to_docx(result_dict, image_paths, output_docx_with_tables)
-                append_json_to_file(result_dict, output_json_with_tables)
+                # append_json_to_file(result_dict, output_json_with_tables)
+                push_content_to_db(result_dict)
             else:
                 result_dict['consist_tables'] = False
                 append_content_to_docx(result_dict, image_paths, output_docx)
-                append_json_to_file(result_dict, output_json)                
+                # append_json_to_file(result_dict, output_json)
+                push_content_to_db(result_dict)            
 
             print("--------------------------output_text---------------------------")
             print(result_dict)
