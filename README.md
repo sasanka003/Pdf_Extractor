@@ -77,9 +77,9 @@ This project is a Python-based application that extracts questions, options, cor
 
 ## Configuration
 1. **Directory Structure**
-    - pdfs/: Directory containing PDF files to be processed.
-    - images/: Directory where extracted images from PDFs will be temporarily stored.
-    - output/: Directory where output files (output.json, output_with_tables.json, output.docx, output_with_tables.docx) will be saved.
+    - `pdfs/:` Directory containing PDF files to be processed.
+    - `images/:` Directory where extracted images from PDFs will be temporarily stored.
+    - `output/:` Directory where output files (output.json, output_with_tables.json, output.docx, output_with_tables.docx) will be saved.
 
 3. **Firebase Configuration**
     - Ensure that your Firebase project is set up and your credentials are correctly configured in firebase_credentials.json.
