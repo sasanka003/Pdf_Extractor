@@ -1,8 +1,5 @@
 import pdfplumber
 from docx import Document
-from docx.shared import Inches
-from PIL import Image
-from io import BytesIO
 import re
 import json
 from dotenv import load_dotenv
@@ -20,8 +17,8 @@ output_json = os.path.join(current_dir, "output", "output.json")
 output_json_with_tables = os.path.join(current_dir, "output", "output_with_tables.json")
 output_docx = os.path.join(current_dir, "output", "output.docx")
 output_docx_with_tables = os.path.join(current_dir, "output", "output_with_tables.docx")
-# pdf_directory = os.path.join(current_dir, "pdfs", "with table")
-pdf_directory = os.path.join(current_dir, "pdfs")
+pdf_directory = os.path.join(current_dir, "pdfs", "with table")
+# pdf_directory = os.path.join(current_dir, "pdfs")
 image_dir = os.path.join(current_dir, "images")
 firebase_credentials = os.path.join(current_dir, "firebase_credentials.json")
 
@@ -58,7 +55,7 @@ class ExtractedData(BaseModel):
 parser = PydanticOutputParser(pydantic_object=ExtractedData)
 
 rephraser_prompt_template = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert Rephraser. Your task is to rephrase and rewrite the given text preserving all the original data. Ensure that the rephrased text is clear, concise, and maintains the original meaning. If there are python list structures leave them as they are and rephrase the rest of the text."),
+    ("system", "You are an expert Rephraser. Your task is to rephrase and rewrite the given text preserving all the original data. Ensure that the rephrased text is clear, concise, and maintains the original meaning. If there are markdown table structures leave them as they are and rephrase the rest of the text."),
     ("human", "Use the following text:\n\n{text}")
 ])
 
@@ -69,19 +66,19 @@ table_recognizer_prompt_template = ChatPromptTemplate.from_messages([
         **Key guidelines:**
 
         * **Precision is paramount:** Ensure that the extracted tables are structurally correct and reflect the original data with utmost fidelity.
-        * **Clarity and consistency:** Use a lists of lists style for the tables.
+        * **Clarity and consistency:** Use markdown format for the tables.
         * **Contextual understanding:** Consider the surrounding text to infer the table's purpose and structure.
 
         **Output format:**
 
-        * Replace the original table with a formatted list of lists, separated by two newlines.
+        * Replace the original table with a formatted markdown table, separated by two newlines.
         * If a table is detected, return the output as a dictionary with two fields: 
-          - `content`: The text with the table(s) formatted as list of lists.
+          - `content`: The text with the table(s) formatted as markdown tables.
           - `table_detected`: `true`
         * If no table is detected, return the output as a dictionary with two fields:
           - `content`: The original text without any modifications.
           - `table_detected`: `false`
-        *Reply in json format.
+        *Reply in json format. only use 'false' or 'true' for 'table_detected' field.*
 
         **Example:**
 
@@ -93,11 +90,11 @@ table_recognizer_prompt_template = ChatPromptTemplate.from_messages([
 
         Formatted output:
 
-        [
-        ["Name", "Age", "City"],
-        ["Alice", "25", "New York"],
-        ["Bob", "30", "London"]
-        ]
+        | Name  | Age | City      |
+        |-------|-----|-----------|
+        | Alice | 25  | New York  |
+        | Bob   | 30  | London    |
+    
     """),
     ("human", "Use the following text:\n\n{text}")
 ])
@@ -243,8 +240,12 @@ def list_tables_and_rephrase(text, tabel_chain, rephrase_chain):
 
     try:
         parsed_data = json.loads(json_content)
+        print("json file :")
+        print(parsed_data['table_detected'])
     except json.JSONDecodeError:
         parsed_data = json_content
+        print("Non-json file :")
+        print(parsed_data['table_detected'])
 
     # Extract Tables and content
     tables_present = parsed_data['table_detected']
