@@ -245,7 +245,8 @@ def list_tables_and_rephrase(text, tabel_chain, rephrase_chain):
     except json.JSONDecodeError:
         parsed_data = json_content
         print("Non-json file :")
-        print(parsed_data['table_detected'])
+        print(parsed_data)
+        list_tables_and_rephrase(text, tabel_chain, rephrase_chain)
 
     # Extract Tables and content
     tables_present = parsed_data['table_detected']
