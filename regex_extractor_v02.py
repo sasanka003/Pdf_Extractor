@@ -524,7 +524,7 @@ def extract_pdfs(directory):
             print("--------------------------output_text---------------------------")
             print(result_dict)
             print("----------------------------------------------------------------")
-        print("Incomplete files: ", incomplete)    
+    print("Incomplete files: ", incomplete)    
 
     return
 
